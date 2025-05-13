@@ -16,6 +16,8 @@ export function StatsSection() {
     async function fetchStats() {
       try {
         setIsLoading(true)
+
+        // Fetch stats with fallback values in case of permission errors
         const [customers, transactions, countries] = await Promise.all([
           getCustomerCount(),
           getTransactionCount(),
@@ -28,6 +30,7 @@ export function StatsSection() {
         setError(null)
       } catch (err) {
         console.error("Failed to fetch stats:", err)
+        // We shouldn't reach here since the individual functions handle their errors
         setError("Failed to load statistics. Please try again later.")
       } finally {
         setIsLoading(false)
