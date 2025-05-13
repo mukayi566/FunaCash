@@ -63,21 +63,21 @@ export default function SendMoneyPage() {
   const [toCountry, setToCountry] = useState(countries[1])
   const [amount, setAmount] = useState("")
   const [convertedAmount, setConvertedAmount] = useState("")
-  const [selectedRecipient, setSelectedRecipient] = useState<any>(null)
+  const [selectedRecipient, setSelectedRecipient] = useState(null)
   const [recipientName, setRecipientName] = useState("")
   const [recipientPhone, setRecipientPhone] = useState("")
   const [note, setNote] = useState("")
   const [openFromCountry, setOpenFromCountry] = useState(false)
   const [openToCountry, setOpenToCountry] = useState(false)
 
-  const handleAmountChange = (value: string) => {
+  const handleAmountChange = (value) => {
     setAmount(value)
     // Simple conversion for demo purposes
     const numericValue = Number.parseFloat(value.replace(/,/g, "")) || 0
     setConvertedAmount((numericValue * 0.95).toFixed(2))
   }
 
-  const handleSelectRecipient = (recipient: any) => {
+  const handleSelectRecipient = (recipient) => {
     setSelectedRecipient(recipient)
     setRecipientName(recipient.name)
     setRecipientPhone(recipient.phone)
