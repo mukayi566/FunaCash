@@ -7,26 +7,12 @@ import { getStorage, type FirebaseStorage } from "firebase/storage"
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-}
-
-// Validate Firebase config
-const validateFirebaseConfig = () => {
-  const requiredFields = ["apiKey", "authDomain", "projectId", "storageBucket", "messagingSenderId", "appId"]
-
-  const missingFields = requiredFields.filter((field) => !firebaseConfig[field as keyof typeof firebaseConfig])
-
-  if (missingFields.length > 0) {
-    console.error(`Missing Firebase config fields: ${missingFields.join(", ")}`)
-    return false
-  }
-
-  return true
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
 }
 
 // Initialize Firebase
@@ -37,8 +23,10 @@ let firebaseStorage: FirebaseStorage | null = null
 let firebaseError: string | null = null
 let firebaseAuth: Auth | null = null
 
-try {
-  if (validateFirebaseConfig()) {
+// Only initialize Firebase in the browser
+if (typeof window !== "undefined") {
+  try {
+    // Check if Firebase is already initialized
     if (!getApps().length) {
       firebaseApp = initializeApp(firebaseConfig)
     } else {
@@ -50,23 +38,15 @@ try {
     firebaseDb = getFirestore(firebaseApp)
     firebaseStorage = getStorage(firebaseApp)
     firebaseAuth = auth
-  } else {
+  } catch (e: any) {
+    console.error("Firebase initialization error:", e)
     firebaseApp = null
     auth = null
     firebaseDb = null
     firebaseStorage = null
     firebaseAuth = null
-    firebaseError = "Invalid Firebase configuration"
-    console.error("Firebase initialization error: Invalid Firebase configuration")
+    firebaseError = e.message
   }
-} catch (e: any) {
-  firebaseApp = null
-  auth = null
-  firebaseDb = null
-  firebaseStorage = null
-  firebaseAuth = null
-  firebaseError = e.message
-  console.error("Firebase initialization error", e)
 }
 
 // Export Firebase services

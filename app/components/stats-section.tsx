@@ -1,50 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { getCustomerCount, getTransactionCount, getCountriesServed } from "@/lib/stats-service"
-import { AnimatedCounter } from "./animated-counter"
+import { useState } from "react"
 import { Users, ArrowRightLeft, Globe } from "lucide-react"
+import { AnimatedCounter } from "./animated-counter"
+
+// Use hardcoded values instead of fetching from Firebase
+const FALLBACK_CUSTOMER_COUNT = 500
+const FALLBACK_TRANSACTION_COUNT = 1200
+const FALLBACK_COUNTRIES_COUNT = 2
 
 export function StatsSection() {
-  const [customerCount, setCustomerCount] = useState(0)
-  const [transactionCount, setTransactionCount] = useState(0)
-  const [countriesCount, setCountriesCount] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
+  const [customerCount, setCustomerCount] = useState(FALLBACK_CUSTOMER_COUNT)
+  const [transactionCount, setTransactionCount] = useState(FALLBACK_TRANSACTION_COUNT)
+  const [countriesCount, setCountriesCount] = useState(FALLBACK_COUNTRIES_COUNT)
+  const [isLoading, setIsLoading] = useState(false)
 
-  useEffect(() => {
-    // Fetch each stat independently to prevent one error from affecting others
-    async function fetchStats() {
-      setIsLoading(true)
-
-      try {
-        const customers = await getCustomerCount()
-        setCustomerCount(customers)
-      } catch (err) {
-        console.warn("Error fetching customer count:", err)
-        setCustomerCount(500) // Fallback value
-      }
-
-      try {
-        const transactions = await getTransactionCount()
-        setTransactionCount(transactions)
-      } catch (err) {
-        console.warn("Error fetching transaction count:", err)
-        setTransactionCount(1200) // Fallback value
-      }
-
-      try {
-        const countries = await getCountriesServed()
-        setCountriesCount(countries)
-      } catch (err) {
-        console.warn("Error fetching countries count:", err)
-        setCountriesCount(2) // Fallback value
-      }
-
-      setIsLoading(false)
-    }
-
-    fetchStats()
-  }, [])
+  // No network requests in this component anymore
 
   return (
     <section className="w-full py-12 md:py-16 bg-gradient-to-br from-blue-50 via-white to-blue-50">
@@ -68,12 +39,7 @@ export function StatsSection() {
             <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
               <Users className="h-6 w-6 text-blue-700" />
             </div>
-            <AnimatedCounter
-              endValue={isLoading ? 0 : customerCount}
-              title="Registered Customers"
-              suffix="+"
-              className="mb-2"
-            />
+            <AnimatedCounter endValue={customerCount} title="Registered Customers" suffix="+" className="mb-2" />
             <p className="text-gray-600 text-sm">Trusted by customers across Africa</p>
           </div>
 
@@ -81,12 +47,7 @@ export function StatsSection() {
             <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
               <ArrowRightLeft className="h-6 w-6 text-blue-700" />
             </div>
-            <AnimatedCounter
-              endValue={isLoading ? 0 : transactionCount}
-              title="Successful Transfers"
-              suffix="+"
-              className="mb-2"
-            />
+            <AnimatedCounter endValue={transactionCount} title="Successful Transfers" suffix="+" className="mb-2" />
             <p className="text-gray-600 text-sm">Fast and secure money transfers</p>
           </div>
 
@@ -94,7 +55,7 @@ export function StatsSection() {
             <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
               <Globe className="h-6 w-6 text-blue-700" />
             </div>
-            <AnimatedCounter endValue={isLoading ? 0 : countriesCount} title="Countries Served" className="mb-2" />
+            <AnimatedCounter endValue={countriesCount} title="Countries Served" className="mb-2" />
             <p className="text-gray-600 text-sm">Connecting Zambia and Zimbabwe</p>
           </div>
         </div>
