@@ -7,8 +7,7 @@ const FALLBACK_TRANSACTION_COUNT = 1200
 const FALLBACK_COUNTRIES_COUNT = 2
 
 /**
- * Gets the count of registered customers
- * Falls back to a default value if permissions are insufficient
+ * Gets the count of registered customers or returns a fallback value
  */
 export async function getCustomerCount(): Promise<number> {
   try {
@@ -17,15 +16,13 @@ export async function getCustomerCount(): Promise<number> {
     const snapshot = await getCountFromServer(q)
     return snapshot.data().count
   } catch (error: any) {
-    console.error("Error getting customer count:", error)
-    // Return fallback value for public display when permissions are insufficient
+    console.warn("Using fallback customer count due to permissions")
     return FALLBACK_CUSTOMER_COUNT
   }
 }
 
 /**
- * Gets the count of successful transactions
- * Falls back to a default value if permissions are insufficient
+ * Gets the count of successful transactions or returns a fallback value
  */
 export async function getTransactionCount(): Promise<number> {
   try {
@@ -34,8 +31,7 @@ export async function getTransactionCount(): Promise<number> {
     const snapshot = await getCountFromServer(q)
     return snapshot.data().count
   } catch (error: any) {
-    console.error("Error getting transaction count:", error)
-    // Return fallback value for public display when permissions are insufficient
+    console.warn("Using fallback transaction count due to permissions")
     return FALLBACK_TRANSACTION_COUNT
   }
 }
@@ -44,12 +40,6 @@ export async function getTransactionCount(): Promise<number> {
  * Gets the count of countries served
  */
 export async function getCountriesServed(): Promise<number> {
-  try {
-    // For now, we're just returning 2 since we serve Zambia and Zimbabwe
-    // This could be expanded in the future to query a countries collection
-    return FALLBACK_COUNTRIES_COUNT
-  } catch (error: any) {
-    console.error("Error getting countries count:", error)
-    return FALLBACK_COUNTRIES_COUNT
-  }
+  // This is a static value, so no need to query Firestore
+  return FALLBACK_COUNTRIES_COUNT
 }
