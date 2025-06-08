@@ -102,9 +102,7 @@ export default function ProfilePage() {
           setProfilePictureUrl(userData.profile_picture)
         } else {
           // Set default avatar
-          setProfilePictureUrl(
-            `/placeholder.svg?height=96&width=96&text=${userData.first_name?.charAt(0)}${userData.last_name?.charAt(0)}`,
-          )
+          setProfilePictureUrl("/placeholder.svg")
         }
 
         // Set user data
@@ -236,9 +234,7 @@ export default function ProfilePage() {
 
         if (updateResult.success) {
           // Set default avatar
-          setProfilePictureUrl(
-            `/placeholder.svg?height=96&width=96&text=${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`,
-          )
+          setProfilePictureUrl("/placeholder.svg")
           toast({
             title: "Profile picture removed",
             description: "Your profile picture has been removed successfully",
@@ -332,10 +328,7 @@ export default function ProfilePage() {
                   <div className="relative">
                     <Avatar className="w-24 h-24 border-2 border-primary">
                       <AvatarImage
-                        src={
-                          user?.profilePictureUrl ||
-                          `/placeholder.svg?height=96&width=96&text=${getInitials(user?.displayName) || "/placeholder.svg"}`
-                        }
+                        src={user?.profilePictureUrl || "/placeholder.svg" || "/placeholder.svg"}
                         alt={user?.displayName || "User"}
                       />
                       <AvatarFallback>{getInitials(user?.displayName)}</AvatarFallback>
