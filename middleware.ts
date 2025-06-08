@@ -1,19 +1,23 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Debug: Log all cookies
-  console.log("Middleware checking auth, cookies:", request.cookies.getAll())
+  // Create Supabase client
+  const supabase = createClient()
 
-  // More lenient authentication check
-  const isAuthenticated = request.cookies.has("user_authenticated") || request.cookies.has("user_id") // Consider authenticated if user_id exists
+  // Get the current user session
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
-  const userRole = request.cookies.get("user_role")?.value || "customer" // Default to customer if not set
-  const userId = request.cookies.get("user_id")?.value
+  const isAuthenticated = !!user && !error
+  const userRole = request.cookies.get("user_role")?.value || "customer"
 
-  console.log("Auth check:", { isAuthenticated, userRole, userId, pathname })
+  console.log("Auth check:", { isAuthenticated, userRole, pathname, userId: user?.id })
 
   // Public routes that don't require authentication
   const publicRoutes = [
@@ -69,14 +73,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public (public files)
-     */
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
 }

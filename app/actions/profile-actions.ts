@@ -1,59 +1,71 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
-import { firebaseDb } from "@/lib/firebase"
-import { doc, updateDoc } from "firebase/firestore"
-import { uploadProfilePicture } from "@/lib/storage-service"
+import { createClient } from "@/lib/supabase/server"
+import { updateUser } from "@/lib/supabase/database"
 
 export async function updateProfilePicture(userId: string, file: File) {
   try {
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return {
-        success: false,
-        error: "Profile picture must be less than 5MB",
-      }
+    const supabase = createClient()
+
+    // Upload file to Supabase Storage
+    const fileExt = file.name.split(".").pop()
+    const fileName = `${userId}.${fileExt}`
+    const filePath = `profile-pictures/${fileName}`
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("profile-pictures")
+      .upload(filePath, file, {
+        upsert: true,
+      })
+
+    if (uploadError) {
+      throw uploadError
     }
 
-    // Check file type
-    if (!file.type.startsWith("image/")) {
-      return {
-        success: false,
-        error: "Please upload an image file",
-      }
-    }
+    // Get public URL
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("profile-pictures").getPublicUrl(filePath)
 
-    // Upload the file to Firebase Storage
-    const uploadResult = await uploadProfilePicture(userId, file)
-
-    if (!uploadResult.success) {
-      return {
-        success: false,
-        error: uploadResult.error,
-      }
-    }
-
-    // Update the user document with the profile picture URL
-    const userRef = doc(firebaseDb, "users", userId)
-    await updateDoc(userRef, {
-      profilePicture: uploadResult.url,
+    // Update user profile with new picture URL
+    await updateUser(userId, {
+      profile_picture: publicUrl,
     })
-
-    // Revalidate paths that might display the profile picture
-    revalidatePath("/dashboard/customer")
-    revalidatePath("/dashboard/customer/profile")
-    revalidatePath("/dashboard/agent")
-    revalidatePath("/dashboard/agent/profile")
 
     return {
       success: true,
-      url: uploadResult.url,
+      url: publicUrl,
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating profile picture:", error)
     return {
       success: false,
-      error: "Failed to update profile picture",
+      error: error.message || "Failed to update profile picture",
+    }
+  }
+}
+
+export async function removeProfilePicture(userId: string) {
+  try {
+    const supabase = createClient()
+
+    // Remove profile picture URL from user profile
+    await updateUser(userId, {
+      profile_picture: null,
+    })
+
+    // Optionally delete the file from storage
+    const filePath = `profile-pictures/${userId}`
+    await supabase.storage.from("profile-pictures").remove([filePath])
+
+    return {
+      success: true,
+    }
+  } catch (error: any) {
+    console.error("Error removing profile picture:", error)
+    return {
+      success: false,
+      error: error.message || "Failed to remove profile picture",
     }
   }
 }

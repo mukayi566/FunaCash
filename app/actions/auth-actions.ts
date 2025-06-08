@@ -1,125 +1,88 @@
 "use server"
+
 import { cookies } from "next/headers"
-import { firebaseAuth, firebaseDb } from "@/lib/firebase"
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth"
-import { doc, setDoc, query, where, getDocs, collection } from "firebase/firestore"
-import { rateLimitService } from "@/lib/rate-limit-service"
-import { authLogger } from "@/lib/auth-logger"
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
+import { createUser, getUserByUsername } from "@/lib/supabase/database"
 
 export async function signIn(formData: FormData) {
   const username = formData.get("username") as string
   const password = formData.get("password") as string
 
   if (!username || !password) {
-    authLogger.logSignInFailure(username || "unknown", "missing_credentials", "Username and password are required")
     return {
       error: "Username and password are required",
       errorCode: "missing_credentials",
     }
   }
 
-  if (rateLimitService.isBlocked(username)) {
-    const remainingTime = rateLimitService.getRemainingBlockTime(username)
-    authLogger.logRateLimitTriggered(username, remainingTime)
-
-    const minutes = Math.ceil(remainingTime / 60000)
-    return {
-      error: "Too many failed attempts. Please try again in " + minutes + " minutes.",
-      errorCode: "rate_limited",
-      rateLimited: true,
-      retryAfter: remainingTime,
-    }
-  }
-
-  authLogger.logSignInAttempt(username, { timestamp: new Date().toISOString() })
-
   try {
-    const usersQuery = query(collection(firebaseDb, "users"), where("username", "==", username))
-    const usersSnapshot = await getDocs(usersQuery)
+    // Get user by username to find their email
+    const userData = await getUserByUsername(username)
 
-    if (usersSnapshot.empty) {
-      const rateLimitResult = rateLimitService.recordAttempt(username, false)
-      authLogger.logSignInFailure(username, "user_not_found", "Invalid username or password")
-
+    if (!userData) {
       return {
         error: "Invalid username or password. Please check your credentials and try again.",
         errorCode: "invalid_credentials",
-        remainingAttempts: rateLimitResult.remainingAttempts,
-        rateLimited: rateLimitResult.blocked,
-        blockDuration: rateLimitResult.blockDuration,
       }
     }
 
-    const userDoc = usersSnapshot.docs[0]
-    const userData = userDoc.data()
+    const supabase = createClient()
 
-    const userCredential = await signInWithEmailAndPassword(firebaseAuth, userData.email, password)
-    const user = userCredential.user
-
-    rateLimitService.recordAttempt(username, true)
-    authLogger.logSignInSuccess(username, userData.email)
-
-    cookies().set("user_id", user.uid)
-    cookies().set("user_role", userData.role || "customer")
-    cookies().set("user_authenticated", "true")
-
-    if (userData.role === "agent") {
-      return { success: true, redirectTo: "/dashboard/agent" }
-    } else {
-      return { success: true, redirectTo: "/dashboard/customer" }
-    }
-  } catch (error: any) {
-    const rateLimitResult = rateLimitService.recordAttempt(username, false)
-
-    let errorMessage = "An error occurred during sign in. Please try again."
-    let errorCode = "unknown_error"
-
-    switch (error.code) {
-      case "auth/invalid-credential":
-      case "auth/wrong-password":
-        errorMessage = "Invalid username or password. Please check your credentials and try again."
-        errorCode = "invalid_credentials"
-        break
-      case "auth/user-disabled":
-        errorMessage = "This account has been disabled. Please contact support for assistance."
-        errorCode = "account_disabled"
-        break
-      case "auth/user-not-found":
-        errorMessage = "No account found with this username. Please check your username or sign up for a new account."
-        errorCode = "user_not_found"
-        break
-      case "auth/too-many-requests":
-        errorMessage = "Too many failed login attempts. Please try again later or reset your password."
-        errorCode = "too_many_requests"
-        break
-      case "auth/network-request-failed":
-        errorMessage = "Network error. Please check your internet connection and try again."
-        errorCode = "network_error"
-        break
-      case "auth/internal-error":
-        errorMessage = "A server error occurred. Please try again in a few moments."
-        errorCode = "server_error"
-        break
-      case "auth/invalid-email":
-        errorMessage = "Invalid email format. Please check your credentials."
-        errorCode = "invalid_email"
-        break
-      default:
-        errorMessage = "An unexpected error occurred. Please try again."
-        errorCode = "unexpected_error"
-    }
-
-    authLogger.logSignInFailure(username, errorCode, errorMessage, {
-      firebaseErrorCode: error.code,
-      firebaseErrorMessage: error.message,
+    // Sign in with email and password
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: userData.email,
+      password: password,
     })
 
+    if (error) {
+      let errorMessage = "An error occurred during sign in. Please try again."
+      let errorCode = "unknown_error"
+
+      switch (error.message) {
+        case "Invalid login credentials":
+          errorMessage = "Invalid username or password. Please check your credentials and try again."
+          errorCode = "invalid_credentials"
+          break
+        case "Email not confirmed":
+          errorMessage = "Please confirm your email address before signing in."
+          errorCode = "email_not_confirmed"
+          break
+        case "Too many requests":
+          errorMessage = "Too many failed login attempts. Please try again later."
+          errorCode = "too_many_requests"
+          break
+        default:
+          errorMessage = error.message || "An unexpected error occurred. Please try again."
+          errorCode = "unexpected_error"
+      }
+
+      return {
+        error: errorMessage,
+        errorCode,
+      }
+    }
+
+    if (data.user) {
+      // Set cookies for middleware
+      cookies().set("user_id", data.user.id)
+      cookies().set("user_role", userData.role || "customer")
+      cookies().set("user_authenticated", "true")
+
+      // Redirect based on role
+      if (userData.role === "agent") {
+        redirect("/dashboard/agent")
+      } else {
+        redirect("/dashboard/customer")
+      }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Sign in error:", error)
     return {
-      error: errorMessage,
-      errorCode,
-      remainingAttempts: rateLimitResult.remainingAttempts,
-      rateLimited: rateLimitResult.blocked,
-      blockDuration: rateLimitResult.blockDuration,
+      error: "An unexpected error occurred. Please try again.",
+      errorCode: "unexpected_error",
     }
   }
 }
@@ -132,7 +95,6 @@ export async function registerUser(formData: FormData) {
   const country = formData.get("country") as string
   const role = formData.get("role") as string
   const password = formData.get("password") as string
-  const confirmPassword = formData.get("confirmPassword") as string
   const username = formData.get("username") as string
 
   if (!email || !password || !username) {
@@ -140,64 +102,74 @@ export async function registerUser(formData: FormData) {
   }
 
   try {
-    const userCredential = await createUserWithEmailAndPassword(firebaseAuth, email, password)
-    const user = userCredential.user
+    // Check if username already exists
+    const existingUser = await getUserByUsername(username)
+    if (existingUser) {
+      return { success: false, message: "Username is already taken. Please choose a different username." }
+    }
 
-    await setDoc(doc(firebaseDb, "users", user.uid), {
-      firstName,
-      lastName,
+    const supabase = createClient()
+
+    // Create auth user
+    const { data, error } = await supabase.auth.signUp({
       email,
-      phone,
-      country,
-      role: role || "customer",
-      balance: 0,
-      createdAt: new Date(),
-      username,
+      password,
     })
 
-    authLogger.logSignInSuccess(username, email)
+    if (error) {
+      let errorMessage = "An error occurred during registration. Please try again."
 
-    return {
-      success: true,
-      redirectTo: "/auth/login",
+      switch (error.message) {
+        case "User already registered":
+          errorMessage = "This email is already in use. Please try logging in or use a different email."
+          break
+        case "Password should be at least 6 characters":
+          errorMessage = "Password is too weak. Please use a stronger password with at least 6 characters."
+          break
+        case "Unable to validate email address: invalid format":
+          errorMessage = "Invalid email address format."
+          break
+        default:
+          errorMessage = error.message || "An unexpected error occurred during registration."
+      }
+
+      return { success: false, message: errorMessage }
     }
+
+    if (data.user) {
+      // Create user profile in database
+      await createUser({
+        id: data.user.id,
+        email,
+        username,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        country,
+        role: role || "customer",
+        balance: 0,
+      })
+
+      redirect("/auth/login?message=Registration successful. Please sign in.")
+    }
+
+    return { success: true }
   } catch (error: any) {
-    console.error("Error during registration:", error)
-
-    let errorMessage = "An error occurred during registration. Please try again."
-
-    switch (error.code) {
-      case "auth/email-already-in-use":
-        errorMessage = "This email is already in use. Please try logging in or use a different email."
-        break
-      case "auth/invalid-email":
-        errorMessage = "Invalid email address format."
-        break
-      case "auth/weak-password":
-        errorMessage = "Password is too weak. Please use a stronger password with at least 6 characters."
-        break
-      case "auth/network-request-failed":
-        errorMessage = "Network error. Please check your internet connection and try again."
-        break
-      case "auth/internal-error":
-        errorMessage = "A server error occurred. Please try again in a few moments."
-        break
-    }
-
-    return { success: false, message: errorMessage }
+    console.error("Registration error:", error)
+    return { success: false, message: "An unexpected error occurred during registration. Please try again." }
   }
 }
 
 export async function logoutUser() {
+  const supabase = createClient()
+
+  // Sign out from Supabase
+  await supabase.auth.signOut()
+
+  // Clear cookies
   cookies().delete("user_id")
   cookies().delete("user_role")
   cookies().delete("user_authenticated")
 
-  try {
-    await signOut(firebaseAuth)
-    return { success: true, redirectTo: "/" }
-  } catch (error: any) {
-    console.error("Error during logout:", error)
-    return { success: true, redirectTo: "/" }
-  }
+  redirect("/")
 }

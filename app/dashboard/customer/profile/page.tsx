@@ -7,8 +7,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowLeft, Check, Edit, Mail, Phone, User, Upload } from "lucide-react"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
-import { firebaseDb } from "@/lib/firebase"
+import { getUserById, updateUser } from "@/lib/supabase/database"
 import { uploadProfilePicture, deleteProfilePicture } from "@/lib/storage-service"
 import { updateUserProfilePicture } from "@/lib/db-service"
 import { updateProfilePicture } from "@/app/actions/profile-actions"
@@ -73,15 +72,13 @@ export default function ProfilePage() {
   const fetchUserProfile = async (id: string) => {
     try {
       setIsLoading(true)
-      const userDoc = await getDoc(doc(firebaseDb, "users", id))
+      const userData = await getUserById(id)
 
-      if (userDoc.exists()) {
-        const userData = userDoc.data()
-
+      if (userData) {
         // Format date if it exists
         let formattedDate = "Recently"
-        if (userData.createdAt) {
-          const date = userData.createdAt.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt)
+        if (userData.created_at) {
+          const date = new Date(userData.created_at)
           formattedDate = date.toLocaleDateString("en-US", {
             year: "numeric",
             month: "long",
@@ -90,32 +87,30 @@ export default function ProfilePage() {
         }
 
         setProfile({
-          firstName: userData.firstName || "",
-          lastName: userData.lastName || "",
+          firstName: userData.first_name || "",
+          lastName: userData.last_name || "",
           email: userData.email || "",
           phone: userData.phone || "",
           country: userData.country || "",
           address: userData.address || "",
           dateJoined: formattedDate,
-          verificationStatus: userData.verificationStatus || "Pending",
+          verificationStatus: userData.verification_status || "Pending",
         })
 
         // Set profile picture if it exists
-        if (userData.profilePicture) {
-          setProfilePictureUrl(userData.profilePicture)
+        if (userData.profile_picture) {
+          setProfilePictureUrl(userData.profile_picture)
         } else {
           // Set default avatar
-          setProfilePictureUrl(
-            `/placeholder.svg?height=96&width=96&text=${userData.firstName?.charAt(0)}${userData.lastName?.charAt(0)}`,
-          )
+          setProfilePictureUrl("/placeholder.svg")
         }
 
         // Set user data
         setUser({
           uid: id,
-          displayName: `${userData.firstName} ${userData.lastName}`,
+          displayName: `${userData.first_name} ${userData.last_name}`,
           email: userData.email,
-          profilePictureUrl: userData.profilePicture || null,
+          profilePictureUrl: userData.profile_picture || null,
         })
       }
     } catch (error) {
@@ -136,12 +131,10 @@ export default function ProfilePage() {
     setIsLoading(true)
 
     try {
-      const userRef = doc(firebaseDb, "users", userId)
-
       // Only update fields that can be changed by the user
-      await updateDoc(userRef, {
-        firstName: profile.firstName,
-        lastName: profile.lastName,
+      await updateUser(userId, {
+        first_name: profile.firstName,
+        last_name: profile.lastName,
         phone: profile.phone,
         address: profile.address,
       })
@@ -241,9 +234,7 @@ export default function ProfilePage() {
 
         if (updateResult.success) {
           // Set default avatar
-          setProfilePictureUrl(
-            `/placeholder.svg?height=96&width=96&text=${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`,
-          )
+          setProfilePictureUrl("/placeholder.svg")
           toast({
             title: "Profile picture removed",
             description: "Your profile picture has been removed successfully",
@@ -337,10 +328,7 @@ export default function ProfilePage() {
                   <div className="relative">
                     <Avatar className="w-24 h-24 border-2 border-primary">
                       <AvatarImage
-                        src={
-                          user?.profilePictureUrl ||
-                          `/placeholder.svg?height=96&width=96&text=${getInitials(user?.displayName)}`
-                        }
+                        src={user?.profilePictureUrl || "/placeholder.svg" || "/placeholder.svg"}
                         alt={user?.displayName || "User"}
                       />
                       <AvatarFallback>{getInitials(user?.displayName)}</AvatarFallback>

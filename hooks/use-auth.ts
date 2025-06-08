@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { firebaseAuth } from "@/lib/firebase"
-import { onAuthStateChanged, type User } from "firebase/auth"
+import { createClient } from "@/lib/supabase/client"
+import type { User } from "@supabase/supabase-js"
 
 interface AuthHook {
   user: User | null
@@ -14,12 +14,23 @@ export const useAuth = (): AuthHook => {
   const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-      setUser(user)
+    const supabase = createClient()
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   return { user, loading }
